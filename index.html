@@ -14,9 +14,8 @@
             padding: 20px;
             background-color: #f0f0f0;
         }
-        /* Removed #controls styles */
         #game-container {
-            position: relative; /* For context menu positioning */
+            position: relative;
         }
         #game-grid {
             background-color: #333;
@@ -35,7 +34,7 @@
             fill: white;
             text-anchor: middle;
             dominant-baseline: middle;
-            pointer-events: none; /* So text doesn't interfere with triangle click */
+            pointer-events: none;
         }
         #context-menu {
             display: none;
@@ -63,19 +62,18 @@
             background-color: #e0e0e0;
         }
         #instructions {
-            margin-bottom: 20px; /* Adjusted margin as controls are gone */
+            margin-bottom: 20px;
             padding: 10px;
             background-color: white;
             border: 1px solid #ccc;
             border-radius: 5px;
             max-width: 700px;
+            text-align: center;
         }
-
-        /* Styles for SVG buttons */
         .svg-button rect {
             stroke: #555;
             stroke-width: 1px;
-            rx: 5; /* rounded corners */
+            rx: 5;
             ry: 5;
         }
         .svg-button text {
@@ -83,7 +81,7 @@
             dominant-baseline: middle;
             fill: #333;
             font-size: 14px;
-            pointer-events: none; /* Text shouldn't capture click from rect */
+            pointer-events: none;
         }
         .svg-button.enabled rect {
             fill: #e9e9e9;
@@ -99,22 +97,22 @@
         .svg-button.disabled text {
             fill: #aaa;
         }
+        #phase-instructions {
+            font-weight: bold;
+            margin-top: 5px;
+            color: #0056b3;
+        }
 
     </style>
 </head>
 <body>
     <h1>Triangular Chip Game</h1>
 
-    <!-- Removed controls div -->
-
     <div id="instructions">
-        <p>Click on any triangle cell to interact:</p>
-        <ul>
-            <li><b>Add 2 Chips:</b> Adds two chips to the cell.</li>
-            <li><b>Remove 2 Chips:</b> Removes two chips (if present).</li>
-            <li><b>Fire Chip:</b> Removes one chip from the cell and adds one chip to each of its 3 edge-adjacent neighbors.</li>
-        </ul>
-        <p>The game starts with 1 chip in the middle. Use Back/Forward buttons (top-left of the grid) to undo/redo moves.</p>
+        <p>
+            Use Back/Forward buttons (top-left of the grid) to undo/redo.
+        </p>
+        <div id="phase-instructions">Setting up: Click a triangle to place/remove a single chip.</div>
     </div>
 
     <div id="game-container">
@@ -133,7 +131,7 @@
         const btnAdd2 = document.getElementById('btnAdd2');
         const btnRemove2 = document.getElementById('btnRemove2');
         const btnFire = document.getElementById('btnFire');
-        // btnBack and btnForward will now be SVG elements, so we get them differently later
+        const phaseInstructionsDiv = document.getElementById('phase-instructions');
 
         const TRIANGLE_SIDE_LENGTH = 50;
         const TRIANGLE_HEIGHT = TRIANGLE_SIDE_LENGTH * Math.sqrt(3) / 2;
@@ -142,14 +140,16 @@
         const GRID_ROWS = 18;
         const GRID_COLS = 30;
 
-        // Adjust C_Y_OFFSET to make space for buttons at the top
         const SVG_BUTTON_HEIGHT = 30;
         const SVG_BUTTON_MARGIN = 10;
+        const SVG_BUTTON_WIDTH = 120;
+
         const C_X_OFFSET = 10;
-        const C_Y_OFFSET = SVG_BUTTON_HEIGHT + SVG_BUTTON_MARGIN * 2; // Make space for buttons
+        const C_Y_OFFSET = SVG_BUTTON_HEIGHT + SVG_BUTTON_MARGIN * 2;
 
         let chips = {};
         let activeCell = null;
+        let gamePhase = 'setup'; // 'setup' or 'play'
 
         let history = [];
         let historyIndex = -1;
@@ -171,7 +171,7 @@
             if (historyIndex > 0) {
                 historyIndex--;
                 chips = deepCloneChips(history[historyIndex]);
-                drawGrid(); // Redraw will also update button states via updateHistoryButtons
+                drawGrid();
             }
         }
 
@@ -179,7 +179,7 @@
             if (historyIndex < history.length - 1) {
                 historyIndex++;
                 chips = deepCloneChips(history[historyIndex]);
-                drawGrid(); // Redraw will also update button states
+                drawGrid();
             }
         }
 
@@ -188,22 +188,20 @@
             const btnForwardSvg = document.getElementById('svgBtnForward');
 
             if (btnBackSvg) {
-                if (historyIndex <= 0) {
-                    btnBackSvg.classList.remove('enabled');
-                    btnBackSvg.classList.add('disabled');
-                } else {
-                    btnBackSvg.classList.remove('disabled');
-                    btnBackSvg.classList.add('enabled');
-                }
+                btnBackSvg.classList.toggle('disabled', historyIndex <= 0);
+                btnBackSvg.classList.toggle('enabled', historyIndex > 0);
             }
             if (btnForwardSvg) {
-                if (historyIndex >= history.length - 1) {
-                    btnForwardSvg.classList.remove('enabled');
-                    btnForwardSvg.classList.add('disabled');
-                } else {
-                    btnForwardSvg.classList.remove('disabled');
-                    btnForwardSvg.classList.add('enabled');
-                }
+                btnForwardSvg.classList.toggle('disabled', historyIndex >= history.length - 1);
+                btnForwardSvg.classList.toggle('enabled', historyIndex < history.length - 1);
+            }
+        }
+
+        function updatePhaseInstructions() {
+            if (gamePhase === 'setup') {
+                phaseInstructionsDiv.innerHTML = `<b>Setup Phase:</b> Click a triangle to place/remove a single chip. Press "Start Game" when ready.`;
+            } else {
+                phaseInstructionsDiv.innerHTML = `<b>Play Phase:</b> Click a triangle to open actions menu.`;
             }
         }
 
@@ -224,6 +222,7 @@
             setChipCount(r, c, getChipCount(r, c) + amount);
         }
 
+        // --- Game Logic (Play Phase) ---
         function performAdd2Chips(r, c) {
             addChips(r, c, 2);
             drawGrid();
@@ -264,150 +263,142 @@
             return el;
         }
 
+        function handlePhaseControlButtonClick() {
+            const btnPhaseControlText = document.getElementById('svgBtnPhaseControlText');
+            if (gamePhase === 'setup') {
+                gamePhase = 'play';
+                btnPhaseControlText.textContent = 'Reset Setup';
+                // Current chip setup becomes the first state of the play phase history
+                history = [deepCloneChips(chips)];
+                historyIndex = 0;
+            } else { // gamePhase === 'play'
+                gamePhase = 'setup';
+                btnPhaseControlText.textContent = 'Start Game';
+                chips = {}; // Clear board for new setup
+                history = [deepCloneChips(chips)]; // Start history fresh for setup
+                historyIndex = 0;
+            }
+            updatePhaseInstructions();
+            updateHistoryButtons(); // Reflect new history state
+            drawGrid(); // Redraw to apply phase changes (e.g., context menu behavior)
+        }
+
         function drawSvgControls() {
-            const buttonWidth = 120;
             const buttonY = SVG_BUTTON_MARGIN;
 
             // Back Button
             const btnBackGroup = createSvgElement('g', { id: 'svgBtnBack', class: 'svg-button' });
-            const btnBackRect = createSvgElement('rect', {
-                x: SVG_BUTTON_MARGIN, y: buttonY,
-                width: buttonWidth, height: SVG_BUTTON_HEIGHT
-            });
-            const btnBackText = createSvgElement('text', {
-                x: SVG_BUTTON_MARGIN + buttonWidth / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2
-            });
+            btnBackGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN, y: buttonY, width: SVG_BUTTON_WIDTH, height: SVG_BUTTON_HEIGHT }));
+            const btnBackText = createSvgElement('text', { x: SVG_BUTTON_MARGIN + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
             btnBackText.textContent = 'Back (Undo)';
-            btnBackGroup.appendChild(btnBackRect);
             btnBackGroup.appendChild(btnBackText);
-            btnBackGroup.addEventListener('click', () => {
-                if (btnBackGroup.classList.contains('enabled')) undo();
-            });
+            btnBackGroup.addEventListener('click', () => { if (btnBackGroup.classList.contains('enabled')) undo(); });
             gameGridSvg.appendChild(btnBackGroup);
 
             // Forward Button
             const btnForwardGroup = createSvgElement('g', { id: 'svgBtnForward', class: 'svg-button' });
-            const btnForwardRect = createSvgElement('rect', {
-                x: SVG_BUTTON_MARGIN * 2 + buttonWidth, y: buttonY,
-                width: buttonWidth, height: SVG_BUTTON_HEIGHT
-            });
-            const btnForwardText = createSvgElement('text', {
-                x: SVG_BUTTON_MARGIN * 2 + buttonWidth + buttonWidth / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2
-            });
+            btnForwardGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN * 2 + SVG_BUTTON_WIDTH, y: buttonY, width: SVG_BUTTON_WIDTH, height: SVG_BUTTON_HEIGHT }));
+            const btnForwardText = createSvgElement('text', { x: SVG_BUTTON_MARGIN * 2 + SVG_BUTTON_WIDTH + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
             btnForwardText.textContent = 'Forward (Redo)';
-            btnForwardGroup.appendChild(btnForwardRect);
             btnForwardGroup.appendChild(btnForwardText);
-            btnForwardGroup.addEventListener('click', () => {
-                if (btnForwardGroup.classList.contains('enabled')) redo();
-            });
+            btnForwardGroup.addEventListener('click', () => { if (btnForwardGroup.classList.contains('enabled')) redo(); });
             gameGridSvg.appendChild(btnForwardGroup);
+
+            // Phase Control Button (Start Game / Reset Setup)
+            const btnPhaseControlGroup = createSvgElement('g', { id: 'svgBtnPhaseControl', class: 'svg-button enabled' }); // Always enabled
+            btnPhaseControlGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN * 3 + SVG_BUTTON_WIDTH * 2, y: buttonY, width: SVG_BUTTON_WIDTH + 20, height: SVG_BUTTON_HEIGHT })); // Slightly wider
+            const btnPhaseControlText = createSvgElement('text', { id: 'svgBtnPhaseControlText', x: SVG_BUTTON_MARGIN * 3 + SVG_BUTTON_WIDTH * 2 + (SVG_BUTTON_WIDTH + 20) / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
+            btnPhaseControlText.textContent = gamePhase === 'setup' ? 'Start Game' : 'Reset Setup';
+            btnPhaseControlGroup.appendChild(btnPhaseControlText);
+            btnPhaseControlGroup.addEventListener('click', handlePhaseControlButtonClick);
+            gameGridSvg.appendChild(btnPhaseControlGroup);
         }
 
         function drawGrid() {
-            gameGridSvg.innerHTML = ''; // Clear previous grid AND controls
-
+            gameGridSvg.innerHTML = '';
             drawSvgControls(); // Draw SVG buttons first
 
             for (let r = 0; r < GRID_ROWS; r++) {
                 for (let c = 0; c < GRID_COLS; c++) {
                     const isUp = (r + c) % 2 === 0;
-                    // Use the C_X_OFFSET and C_Y_OFFSET (which is now larger)
                     const x_base = C_X_OFFSET + c * TRIANGLE_WIDTH_HALF;
                     const y_base = C_Y_OFFSET + r * TRIANGLE_HEIGHT;
-                    let points = "";
-                    let centerX, centerY;
+                    let points, centerX, centerY;
 
                     if (isUp) {
                         points = `${x_base + TRIANGLE_WIDTH_HALF},${y_base} ${x_base},${y_base + TRIANGLE_HEIGHT} ${x_base + TRIANGLE_SIDE_LENGTH},${y_base + TRIANGLE_HEIGHT}`;
-                        centerX = x_base + TRIANGLE_WIDTH_HALF;
-                        centerY = y_base + TRIANGLE_HEIGHT * (2/3);
+                        centerX = x_base + TRIANGLE_WIDTH_HALF; centerY = y_base + TRIANGLE_HEIGHT * (2/3);
                     } else {
                         points = `${x_base},${y_base} ${x_base + TRIANGLE_SIDE_LENGTH},${y_base} ${x_base + TRIANGLE_WIDTH_HALF},${y_base + TRIANGLE_HEIGHT}`;
-                        centerX = x_base + TRIANGLE_WIDTH_HALF;
-                        centerY = y_base + TRIANGLE_HEIGHT * (1/3);
+                        centerX = x_base + TRIANGLE_WIDTH_HALF; centerY = y_base + TRIANGLE_HEIGHT * (1/3);
                     }
 
-                    const triangle = createSvgElement('polygon', {
-                        points: points,
-                        fill: isUp ? '#6fa8dc' : '#3d85c6',
-                        stroke: '#222',
-                        'stroke-width': 1,
-                        class: 'triangle-cell'
-                    });
-                    triangle.dataset.r = r;
-                    triangle.dataset.c = c;
+                    const triangle = createSvgElement('polygon', { points, fill: isUp ? '#6fa8dc' : '#3d85c6', stroke: '#222', 'stroke-width': 1, class: 'triangle-cell' });
+                    triangle.dataset.r = r; triangle.dataset.c = c;
+
                     triangle.addEventListener('click', (event) => {
-                        activeCell = { r: parseInt(triangle.dataset.r), c: parseInt(triangle.dataset.c) };
-                        const rect = gameGridSvg.getBoundingClientRect();
-                        contextMenu.style.left = `${event.clientX - rect.left + 10}px`;
-                        contextMenu.style.top = `${event.clientY - rect.top + 10}px`;
-                        contextMenu.style.display = 'block';
-                        btnFire.disabled = getChipCount(activeCell.r, activeCell.c) < 1;
-                        btnRemove2.disabled = getChipCount(activeCell.r, activeCell.c) < 2;
+                        const clickedR = parseInt(triangle.dataset.r);
+                        const clickedC = parseInt(triangle.dataset.c);
+                        activeCell = { r: clickedR, c: clickedC };
+
+                        if (gamePhase === 'setup') {
+                            if (getChipCount(clickedR, clickedC) > 0) {
+                                setChipCount(clickedR, clickedC, 0); // Remove chip
+                            } else {
+                                setChipCount(clickedR, clickedC, 1); // Add chip
+                            }
+                            drawGrid(); // Redraw to show chip change
+                            recordState(); // Record setup action
+                        } else { // gamePhase === 'play'
+                            const rect = gameGridSvg.getBoundingClientRect();
+                            contextMenu.style.left = `${event.clientX - rect.left + 10}px`;
+                            contextMenu.style.top = `${event.clientY - rect.top + 10}px`;
+                            contextMenu.style.display = 'block';
+                            btnFire.disabled = getChipCount(clickedR, clickedC) < 1;
+                            btnRemove2.disabled = getChipCount(clickedR, clickedC) < 2;
+                        }
                     });
                     gameGridSvg.appendChild(triangle);
 
                     const chipCount = getChipCount(r, c);
                     if (chipCount > 0) {
-                        const chipCircle = createSvgElement('circle', {
-                            cx: centerX,
-                            cy: centerY,
-                            r: TRIANGLE_SIDE_LENGTH / 4,
-                            fill: 'lightskyblue',
-                            stroke: 'blue',
-                            'stroke-width': 2,
-                            'pointer-events': 'none'
-                        });
-                        gameGridSvg.appendChild(chipCircle);
-                        const text = createSvgElement('text', {
-                            x: centerX,
-                            y: centerY,
-                            class: 'chip-text'
-                        });
-                        text.textContent = chipCount;
-                        gameGridSvg.appendChild(text);
+                        const chipVisual = createSvgElement('circle', { cx: centerX, cy: centerY, r: TRIANGLE_SIDE_LENGTH / 4, fill: 'lightskyblue', stroke: 'blue', 'stroke-width': 2, 'pointer-events': 'none' });
+                        gameGridSvg.appendChild(chipVisual);
+                        if (gamePhase === 'play' || chipCount > 1) { // Show count in play phase or if >1 (though setup should only be 0 or 1)
+                             const text = createSvgElement('text', { x: centerX, y: centerY, class: 'chip-text' });
+                             text.textContent = chipCount;
+                             gameGridSvg.appendChild(text);
+                        }
                     }
                 }
             }
-            updateHistoryButtons(); // Ensure button states are correct after full redraw
+            updateHistoryButtons(); // Ensure button states are correct
+            updatePhaseInstructions(); // Ensure phase instructions are up to date
         }
 
-        btnAdd2.addEventListener('click', () => {
-            if (activeCell) performAdd2Chips(activeCell.r, activeCell.c);
-            contextMenu.style.display = 'none';
-        });
-        btnRemove2.addEventListener('click', () => {
-            if (activeCell) performRemove2Chips(activeCell.r, activeCell.c);
-            contextMenu.style.display = 'none';
-        });
-        btnFire.addEventListener('click', () => {
-            if (activeCell) performFireChip(activeCell.r, activeCell.c);
-            contextMenu.style.display = 'none';
-        });
+        // Context Menu Event Handling (Only for Play Phase)
+        btnAdd2.addEventListener('click', () => { if (activeCell && gamePhase === 'play') performAdd2Chips(activeCell.r, activeCell.c); contextMenu.style.display = 'none'; });
+        btnRemove2.addEventListener('click', () => { if (activeCell && gamePhase === 'play') performRemove2Chips(activeCell.r, activeCell.c); contextMenu.style.display = 'none'; });
+        btnFire.addEventListener('click', () => { if (activeCell && gamePhase === 'play') performFireChip(activeCell.r, activeCell.c); contextMenu.style.display = 'none'; });
 
         document.addEventListener('click', (event) => {
-            // Check if the click is outside the context menu AND not on a triangle cell (which opens it)
-            // AND not on an SVG button (to prevent immediate closure if context menu was open)
             const isTriangle = event.target.classList && event.target.classList.contains('triangle-cell');
             const isSvgButton = event.target.closest && event.target.closest('.svg-button');
-
             if (!contextMenu.contains(event.target) && !isTriangle && !isSvgButton) {
                 contextMenu.style.display = 'none';
             }
         });
 
-      function initializeBoard() {
-            chips = {}; // Start with an empty chips object
-
-            history = []; // Clear history
-            historyIndex = -1; // Reset index
-            recordState(); // Record the very first state (which is now empty)
-
-            drawGrid(); // Draw the initial empty grid and controls
+        function initializeBoard() {
+            chips = {};
+            gamePhase = 'setup';
+            history = [];
+            historyIndex = -1;
+            recordState(); // Record initial empty state for setup
+            drawGrid();
         }
 
         initializeBoard();
-
     </script>
 </body>
 </html>
