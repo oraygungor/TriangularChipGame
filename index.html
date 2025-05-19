@@ -14,6 +14,7 @@
             padding: 20px;
             background-color: #f0f0f0;
         }
+        /* Removed #controls styles */
         #game-container {
             position: relative; /* For context menu positioning */
         }
@@ -62,17 +63,50 @@
             background-color: #e0e0e0;
         }
         #instructions {
-            margin-bottom: 20px;
+            margin-bottom: 20px; /* Adjusted margin as controls are gone */
             padding: 10px;
             background-color: white;
             border: 1px solid #ccc;
             border-radius: 5px;
             max-width: 700px;
         }
+
+        /* Styles for SVG buttons */
+        .svg-button rect {
+            stroke: #555;
+            stroke-width: 1px;
+            rx: 5; /* rounded corners */
+            ry: 5;
+        }
+        .svg-button text {
+            text-anchor: middle;
+            dominant-baseline: middle;
+            fill: #333;
+            font-size: 14px;
+            pointer-events: none; /* Text shouldn't capture click from rect */
+        }
+        .svg-button.enabled rect {
+            fill: #e9e9e9;
+            cursor: pointer;
+        }
+        .svg-button.enabled:hover rect {
+            fill: #d0d0d0;
+        }
+        .svg-button.disabled rect {
+            fill: #f5f5f5;
+            cursor: not-allowed;
+        }
+        .svg-button.disabled text {
+            fill: #aaa;
+        }
+
     </style>
 </head>
 <body>
     <h1>Triangular Chip Game</h1>
+
+    <!-- Removed controls div -->
+
     <div id="instructions">
         <p>Click on any triangle cell to interact:</p>
         <ul>
@@ -80,11 +114,11 @@
             <li><b>Remove 2 Chips:</b> Removes two chips (if present).</li>
             <li><b>Fire Chip:</b> Removes one chip from the cell and adds one chip to each of its 3 edge-adjacent neighbors.</li>
         </ul>
-        <p>The game starts with 1 chip in the middle.</p>
+        <p>The game starts with 1 chip in the middle. Use Back/Forward buttons (top-left of the grid) to undo/redo moves.</p>
     </div>
 
     <div id="game-container">
-        <svg id="game-grid" width="850" height="850"></svg> {/* <-- MODIFIED SVG SIZE --> */}
+        <svg id="game-grid" width="850" height="850"></svg>
         <div id="context-menu">
             <button id="btnAdd2">Add 2 Chips</button>
             <button id="btnRemove2">Remove 2 Chips</button>
@@ -99,22 +133,81 @@
         const btnAdd2 = document.getElementById('btnAdd2');
         const btnRemove2 = document.getElementById('btnRemove2');
         const btnFire = document.getElementById('btnFire');
+        // btnBack and btnForward will now be SVG elements, so we get them differently later
 
         const TRIANGLE_SIDE_LENGTH = 50;
         const TRIANGLE_HEIGHT = TRIANGLE_SIDE_LENGTH * Math.sqrt(3) / 2;
         const TRIANGLE_WIDTH_HALF = TRIANGLE_SIDE_LENGTH / 2;
 
-        const GRID_ROWS = 18; // <-- MODIFIED: Number of rows of triangle *bases*
-        const GRID_COLS = 30; // <-- MODIFIED: Number of triangle *half-widths*
+        const GRID_ROWS = 18;
+        const GRID_COLS = 30;
 
-        const C_X_OFFSET = 10; // Offset from SVG left edge
-        const C_Y_OFFSET = 10; // Offset from SVG top edge
+        // Adjust C_Y_OFFSET to make space for buttons at the top
+        const SVG_BUTTON_HEIGHT = 30;
+        const SVG_BUTTON_MARGIN = 10;
+        const C_X_OFFSET = 10;
+        const C_Y_OFFSET = SVG_BUTTON_HEIGHT + SVG_BUTTON_MARGIN * 2; // Make space for buttons
 
-        let chips = {}; // Store chips as {"row,col": count}
+        let chips = {};
+        let activeCell = null;
 
-        let activeCell = null; // For context menu actions {r, c}
+        let history = [];
+        let historyIndex = -1;
 
-        // --- Chip Management ---
+        function deepCloneChips(chipsObj) {
+            return JSON.parse(JSON.stringify(chipsObj));
+        }
+
+        function recordState() {
+            if (historyIndex < history.length - 1) {
+                history = history.slice(0, historyIndex + 1);
+            }
+            history.push(deepCloneChips(chips));
+            historyIndex++;
+            updateHistoryButtons();
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                chips = deepCloneChips(history[historyIndex]);
+                drawGrid(); // Redraw will also update button states via updateHistoryButtons
+            }
+        }
+
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                chips = deepCloneChips(history[historyIndex]);
+                drawGrid(); // Redraw will also update button states
+            }
+        }
+
+        function updateHistoryButtons() {
+            const btnBackSvg = document.getElementById('svgBtnBack');
+            const btnForwardSvg = document.getElementById('svgBtnForward');
+
+            if (btnBackSvg) {
+                if (historyIndex <= 0) {
+                    btnBackSvg.classList.remove('enabled');
+                    btnBackSvg.classList.add('disabled');
+                } else {
+                    btnBackSvg.classList.remove('disabled');
+                    btnBackSvg.classList.add('enabled');
+                }
+            }
+            if (btnForwardSvg) {
+                if (historyIndex >= history.length - 1) {
+                    btnForwardSvg.classList.remove('enabled');
+                    btnForwardSvg.classList.add('disabled');
+                } else {
+                    btnForwardSvg.classList.remove('disabled');
+                    btnForwardSvg.classList.add('enabled');
+                }
+            }
+        }
+
+
         function getChipCount(r, c) {
             return chips[`${r},${c}`] || 0;
         }
@@ -131,10 +224,10 @@
             setChipCount(r, c, getChipCount(r, c) + amount);
         }
 
-        // --- Game Logic ---
         function performAdd2Chips(r, c) {
             addChips(r, c, 2);
             drawGrid();
+            recordState();
         }
 
         function performRemove2Chips(r, c) {
@@ -145,45 +238,24 @@
                 setChipCount(r, c, 0);
             }
             drawGrid();
+            recordState();
         }
 
         function performFireChip(r, c) {
             if (getChipCount(r, c) < 1) return;
-
-            addChips(r, c, -1); // Remove one chip from current cell
-
+            addChips(r, c, -1);
             const isUp = (r + c) % 2 === 0;
             let neighbors = [];
-
             if (isUp) {
-                // Adjacent cells are DOWN-pointing
-                neighbors = [
-                    { r: r, c: c - 1 },     // Left
-                    { r: r, c: c + 1 },     // Right
-                    { r: r + 1, c: c }      // Bottom
-                ];
+                neighbors = [ { r: r, c: c - 1 }, { r: r, c: c + 1 }, { r: r + 1, c: c } ];
             } else {
-                // Adjacent cells are UP-pointing
-                neighbors = [
-                    { r: r, c: c - 1 },     // Left
-                    { r: r, c: c + 1 },     // Right
-                    { r: r - 1, c: c }      // Top
-                ];
+                neighbors = [ { r: r, c: c - 1 }, { r: r, c: c + 1 }, { r: r - 1, c: c } ];
             }
-
-            neighbors.forEach(n => {
-                // Ensure neighbors are within drawn bounds for this demo, though chip data could be "infinite"
-                if (n.r >= 0 && n.r < GRID_ROWS && n.c >= 0 && n.c < GRID_COLS) {
-                     addChips(n.r, n.c, 1);
-                } else {
-                    // For a truly infinite grid, we'd just add them.
-                    addChips(n.r, n.c, 1);
-                }
-            });
+            neighbors.forEach(n => addChips(n.r, n.c, 1));
             drawGrid();
+            recordState();
         }
 
-        // --- Drawing ---
         function createSvgElement(tag, attributes) {
             const el = document.createElementNS(svgNS, tag);
             for (const attr in attributes) {
@@ -192,16 +264,56 @@
             return el;
         }
 
+        function drawSvgControls() {
+            const buttonWidth = 120;
+            const buttonY = SVG_BUTTON_MARGIN;
+
+            // Back Button
+            const btnBackGroup = createSvgElement('g', { id: 'svgBtnBack', class: 'svg-button' });
+            const btnBackRect = createSvgElement('rect', {
+                x: SVG_BUTTON_MARGIN, y: buttonY,
+                width: buttonWidth, height: SVG_BUTTON_HEIGHT
+            });
+            const btnBackText = createSvgElement('text', {
+                x: SVG_BUTTON_MARGIN + buttonWidth / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2
+            });
+            btnBackText.textContent = 'Back (Undo)';
+            btnBackGroup.appendChild(btnBackRect);
+            btnBackGroup.appendChild(btnBackText);
+            btnBackGroup.addEventListener('click', () => {
+                if (btnBackGroup.classList.contains('enabled')) undo();
+            });
+            gameGridSvg.appendChild(btnBackGroup);
+
+            // Forward Button
+            const btnForwardGroup = createSvgElement('g', { id: 'svgBtnForward', class: 'svg-button' });
+            const btnForwardRect = createSvgElement('rect', {
+                x: SVG_BUTTON_MARGIN * 2 + buttonWidth, y: buttonY,
+                width: buttonWidth, height: SVG_BUTTON_HEIGHT
+            });
+            const btnForwardText = createSvgElement('text', {
+                x: SVG_BUTTON_MARGIN * 2 + buttonWidth + buttonWidth / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2
+            });
+            btnForwardText.textContent = 'Forward (Redo)';
+            btnForwardGroup.appendChild(btnForwardRect);
+            btnForwardGroup.appendChild(btnForwardText);
+            btnForwardGroup.addEventListener('click', () => {
+                if (btnForwardGroup.classList.contains('enabled')) redo();
+            });
+            gameGridSvg.appendChild(btnForwardGroup);
+        }
+
         function drawGrid() {
-            gameGridSvg.innerHTML = ''; // Clear previous grid
+            gameGridSvg.innerHTML = ''; // Clear previous grid AND controls
+
+            drawSvgControls(); // Draw SVG buttons first
 
             for (let r = 0; r < GRID_ROWS; r++) {
                 for (let c = 0; c < GRID_COLS; c++) {
-                    const isUp = (r + c) % 2 === 0; // UP if (r+c) is even, DOWN if odd
-
+                    const isUp = (r + c) % 2 === 0;
+                    // Use the C_X_OFFSET and C_Y_OFFSET (which is now larger)
                     const x_base = C_X_OFFSET + c * TRIANGLE_WIDTH_HALF;
                     const y_base = C_Y_OFFSET + r * TRIANGLE_HEIGHT;
-
                     let points = "";
                     let centerX, centerY;
 
@@ -222,21 +334,17 @@
                         'stroke-width': 1,
                         class: 'triangle-cell'
                     });
-
                     triangle.dataset.r = r;
                     triangle.dataset.c = c;
-
                     triangle.addEventListener('click', (event) => {
                         activeCell = { r: parseInt(triangle.dataset.r), c: parseInt(triangle.dataset.c) };
                         const rect = gameGridSvg.getBoundingClientRect();
                         contextMenu.style.left = `${event.clientX - rect.left + 10}px`;
                         contextMenu.style.top = `${event.clientY - rect.top + 10}px`;
                         contextMenu.style.display = 'block';
-
                         btnFire.disabled = getChipCount(activeCell.r, activeCell.c) < 1;
                         btnRemove2.disabled = getChipCount(activeCell.r, activeCell.c) < 2;
                     });
-
                     gameGridSvg.appendChild(triangle);
 
                     const chipCount = getChipCount(r, c);
@@ -251,7 +359,6 @@
                             'pointer-events': 'none'
                         });
                         gameGridSvg.appendChild(chipCircle);
-
                         const text = createSvgElement('text', {
                             x: centerX,
                             y: centerY,
@@ -262,9 +369,9 @@
                     }
                 }
             }
+            updateHistoryButtons(); // Ensure button states are correct after full redraw
         }
 
-        // --- Context Menu Event Handling ---
         btnAdd2.addEventListener('click', () => {
             if (activeCell) performAdd2Chips(activeCell.r, activeCell.c);
             contextMenu.style.display = 'none';
@@ -279,33 +386,32 @@
         });
 
         document.addEventListener('click', (event) => {
-            if (!contextMenu.contains(event.target) && event.target.tagName !== 'polygon') {
+            // Check if the click is outside the context menu AND not on a triangle cell (which opens it)
+            // AND not on an SVG button (to prevent immediate closure if context menu was open)
+            const isTriangle = event.target.classList && event.target.classList.contains('triangle-cell');
+            const isSvgButton = event.target.closest && event.target.closest('.svg-button');
+
+            if (!contextMenu.contains(event.target) && !isTriangle && !isSvgButton) {
                 contextMenu.style.display = 'none';
             }
         });
 
-        // --- Initialization ---
         function initializeBoard() {
-            chips = {}; // Clear any previous chips
-
-            // Calculate a central position
+            chips = {};
             const middleR = Math.floor(GRID_ROWS / 2);
             let middleC = Math.floor(GRID_COLS / 2);
-
-            // Aim for an UP-pointing triangle (r+c is even) for the central chip
-            // For GRID_ROWS = 18, middleR = 9
-            // For GRID_COLS = 30, middleC = 15
-            // (9 + 15) = 24, which is even. So (9,15) is an UP triangle.
             if ((middleR + middleC) % 2 !== 0) {
-                // If (middleR + middleC) is odd, it's a DOWN triangle.
-                // Adjust middleC to make it an UP triangle, e.g., by shifting one column.
-                // This usually makes it visually more "centered" if the grid has an even number of columns.
                 middleC -=1;
-                if (middleC < 0) middleC = 1; // prevent negative column if GRID_COLS is very small
+                if (middleC < 0) middleC = 1;
             }
-
             chips[`${middleR},${middleC}`] = 1;
-            drawGrid();
+            
+            history = [];
+            historyIndex = -1;
+            recordState(); // This also calls updateHistoryButtons and drawGrid
+
+            drawGrid(); // Call drawGrid explicitly to ensure controls are drawn
+            // updateHistoryButtons is called within drawGrid and recordState
         }
 
         initializeBoard();
