@@ -15,7 +15,7 @@
             background-color: #f0f0f0;
         }
         #game-container {
-            position: relative; /* Keep for potential future absolute elements if any */
+            position: relative;
         }
         #game-grid {
             background-color: #333;
@@ -23,9 +23,9 @@
         }
         .triangle-cell {
             cursor: pointer;
-            transition: fill 0.1s, stroke 0.1s, stroke-width 0.1s; /* Faster transition for hover */
+            transition: fill 0.1s, stroke 0.1s, stroke-width 0.1s;
         }
-        .triangle-cell.hovered-play { /* Specific hover class for play phase */
+        .triangle-cell.hovered-play {
             stroke: yellow;
             stroke-width: 3px;
             opacity: 0.9;
@@ -38,7 +38,6 @@
             dominant-baseline: middle;
             pointer-events: none;
         }
-        /* Context menu styles removed */
         #instructions {
             margin-bottom: 20px;
             padding: 10px;
@@ -57,7 +56,7 @@
         .svg-button text {
             text-anchor: middle;
             dominant-baseline: middle;
-            fill: #333;
+            fill: #333; /* Default text color for enabled buttons */
             font-size: 14px;
             pointer-events: none;
         }
@@ -69,11 +68,11 @@
             fill: #d0d0d0;
         }
         .svg-button.disabled rect {
-            fill: #f5f5f5;
+            fill: #f5f5f5; /* Light grey background for disabled */
             cursor: not-allowed;
         }
         .svg-button.disabled text {
-            fill: #aaa;
+            fill: #777; /* Darker grey text for disabled for better contrast */
         }
         #phase-instructions {
             font-weight: bold;
@@ -94,14 +93,12 @@
 
     <div id="game-container">
         <svg id="game-grid" width="850" height="850"></svg>
-        <!-- Context menu div removed -->
     </div>
 
     <script>
         const svgNS = "http://www.w3.org/2000/svg";
         const gameGridSvg = document.getElementById('game-grid');
         const phaseInstructionsDiv = document.getElementById('phase-instructions');
-        // Context menu button variables removed
 
         const TRIANGLE_SIDE_LENGTH = 50;
         const TRIANGLE_HEIGHT = TRIANGLE_SIDE_LENGTH * Math.sqrt(3) / 2;
@@ -118,8 +115,8 @@
         const C_Y_OFFSET = SVG_BUTTON_HEIGHT + SVG_BUTTON_MARGIN * 2;
 
         let chips = {};
-        let gamePhase = 'setup'; // 'setup' or 'play'
-        let hoveredCell = null; // Stores {r, c} of the currently hovered cell in play mode
+        let gamePhase = 'setup';
+        let hoveredCell = null;
 
         let history = [];
         let historyIndex = -1;
@@ -156,13 +153,23 @@
         function updateHistoryButtons() {
             const btnBackSvg = document.getElementById('svgBtnBack');
             const btnForwardSvg = document.getElementById('svgBtnForward');
+
             if (btnBackSvg) {
-                btnBackSvg.classList.toggle('disabled', historyIndex <= 0);
-                btnBackSvg.classList.toggle('enabled', historyIndex > 0);
+                btnBackSvg.classList.remove('enabled', 'disabled');
+                if (historyIndex <= 0) {
+                    btnBackSvg.classList.add('disabled');
+                } else {
+                    btnBackSvg.classList.add('enabled');
+                }
             }
+
             if (btnForwardSvg) {
-                btnForwardSvg.classList.toggle('disabled', historyIndex >= history.length - 1);
-                btnForwardSvg.classList.toggle('enabled', historyIndex < history.length - 1);
+                btnForwardSvg.classList.remove('enabled', 'disabled');
+                if (historyIndex >= history.length - 1) {
+                    btnForwardSvg.classList.add('disabled');
+                } else {
+                    btnForwardSvg.classList.add('enabled');
+                }
             }
         }
 
@@ -201,7 +208,7 @@
             if (currentChips >= 2) {
                 addChips(r, c, -2);
             } else {
-                setChipCount(r, c, 0); // Or do nothing if you prefer strict "must have 2"
+                setChipCount(r, c, 0);
             }
             drawGrid();
             recordState();
@@ -244,10 +251,10 @@
                 history = [deepCloneChips(chips)];
                 historyIndex = 0;
             }
-            if (hoveredCell && hoveredCell.element) { // Clear any existing visual hover if phase changes
+            if (hoveredCell && hoveredCell.element) {
                 hoveredCell.element.classList.remove('hovered-play');
             }
-            hoveredCell = null; // Reset hovered cell on phase change
+            hoveredCell = null;
             updatePhaseInstructions();
             updateHistoryButtons();
             drawGrid();
@@ -255,18 +262,26 @@
 
         function drawSvgControls() {
             const buttonY = SVG_BUTTON_MARGIN;
+
+            // Back Button
             const btnBackGroup = createSvgElement('g', { id: 'svgBtnBack', class: 'svg-button' });
             btnBackGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN, y: buttonY, width: SVG_BUTTON_WIDTH, height: SVG_BUTTON_HEIGHT }));
-            btnBackGroup.appendChild(createSvgElement('text', { x: SVG_BUTTON_MARGIN + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2, textContent: 'Back (Undo)' }));
+            const btnBackText = createSvgElement('text', { x: SVG_BUTTON_MARGIN + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
+            btnBackText.textContent = 'Back (Undo)'; // Set textContent directly
+            btnBackGroup.appendChild(btnBackText);
             btnBackGroup.addEventListener('click', () => { if (btnBackGroup.classList.contains('enabled')) undo(); });
             gameGridSvg.appendChild(btnBackGroup);
 
+            // Forward Button
             const btnForwardGroup = createSvgElement('g', { id: 'svgBtnForward', class: 'svg-button' });
             btnForwardGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN * 2 + SVG_BUTTON_WIDTH, y: buttonY, width: SVG_BUTTON_WIDTH, height: SVG_BUTTON_HEIGHT }));
-            btnForwardGroup.appendChild(createSvgElement('text', { x: SVG_BUTTON_MARGIN * 2 + SVG_BUTTON_WIDTH + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2, textContent: 'Forward (Redo)' }));
+            const btnForwardText = createSvgElement('text', { x: SVG_BUTTON_MARGIN * 2 + SVG_BUTTON_WIDTH + SVG_BUTTON_WIDTH / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
+            btnForwardText.textContent = 'Forward (Redo)'; // Set textContent directly
+            btnForwardGroup.appendChild(btnForwardText);
             btnForwardGroup.addEventListener('click', () => { if (btnForwardGroup.classList.contains('enabled')) redo(); });
             gameGridSvg.appendChild(btnForwardGroup);
 
+            // Phase Control Button (Start Game / Reset Setup)
             const btnPhaseControlGroup = createSvgElement('g', { id: 'svgBtnPhaseControl', class: 'svg-button enabled' });
             btnPhaseControlGroup.appendChild(createSvgElement('rect', { x: SVG_BUTTON_MARGIN * 3 + SVG_BUTTON_WIDTH * 2, y: buttonY, width: SVG_BUTTON_WIDTH + 20, height: SVG_BUTTON_HEIGHT }));
             const btnPhaseControlText = createSvgElement('text', { id: 'svgBtnPhaseControlText', x: SVG_BUTTON_MARGIN * 3 + SVG_BUTTON_WIDTH * 2 + (SVG_BUTTON_WIDTH + 20) / 2, y: buttonY + SVG_BUTTON_HEIGHT / 2 });
@@ -325,7 +340,6 @@
                             drawGrid();
                             recordState();
                         }
-                        // In 'play' phase, click does nothing for actions
                     });
                     gameGridSvg.appendChild(triangle);
 
@@ -345,46 +359,35 @@
             updatePhaseInstructions();
         }
 
-        // Global Keydown Listener
         document.addEventListener('keydown', (event) => {
             if (gamePhase !== 'play' || !hoveredCell) {
-                return; // Only process keys in play phase and if a cell is hovered
+                return;
             }
-
             let actionTaken = false;
             const r = hoveredCell.r;
             const c = hoveredCell.c;
-
             switch (event.key.toLowerCase()) {
                 case 'a':
                     performAdd2Chips(r, c);
                     actionTaken = true;
                     break;
                 case 'd':
-                    if (getChipCount(r, c) >= 2) { // Check before calling to be explicit
+                    if (getChipCount(r, c) >= 2) {
                         performRemove2Chips(r, c);
-                    } else {
-                        console.log("Cannot remove 2: Less than 2 chips present.");
-                        // Optionally add a visual/audio cue for failed action
                     }
-                    actionTaken = true; // Still consider it "handled" to prevent default
+                    actionTaken = true;
                     break;
                 case 's':
-                    if (getChipCount(r, c) >= 1) { // Check before calling
+                    if (getChipCount(r, c) >= 1) {
                         performFireChip(r, c);
-                    } else {
-                        console.log("Cannot fire: No chip present.");
                     }
                     actionTaken = true;
                     break;
             }
-
             if (actionTaken) {
-                event.preventDefault(); // Prevent default browser actions for 'a', 's', 'd'
+                event.preventDefault();
             }
         });
-
-        // Context menu related event listeners removed
 
         function initializeBoard() {
             chips = {};
