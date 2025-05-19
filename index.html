@@ -396,22 +396,14 @@
             }
         });
 
-        function initializeBoard() {
-            chips = {};
-            const middleR = Math.floor(GRID_ROWS / 2);
-            let middleC = Math.floor(GRID_COLS / 2);
-            if ((middleR + middleC) % 2 !== 0) {
-                middleC -=1;
-                if (middleC < 0) middleC = 1;
-            }
-            chips[`${middleR},${middleC}`] = 1;
-            
-            history = [];
-            historyIndex = -1;
-            recordState(); // This also calls updateHistoryButtons and drawGrid
+      function initializeBoard() {
+            chips = {}; // Start with an empty chips object
 
-            drawGrid(); // Call drawGrid explicitly to ensure controls are drawn
-            // updateHistoryButtons is called within drawGrid and recordState
+            history = []; // Clear history
+            historyIndex = -1; // Reset index
+            recordState(); // Record the very first state (which is now empty)
+
+            drawGrid(); // Draw the initial empty grid and controls
         }
 
         initializeBoard();
